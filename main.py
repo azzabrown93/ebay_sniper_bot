@@ -6,8 +6,8 @@ import re
 # ADD YOUR KEYS HERE
 #############################
 
-DISCORD_WEBHOOK = "PASTE_DISCORD_WEBHOOK"
-EBAY_APP_ID = "PASTE_EBAY_APP_ID"
+DISCORD_WEBHOOK = "https://discordapp.com/api/webhooks/1467518544676917344/fQeZ15CBOM_81BBsRnKNwH_Rpuh5djbjr9T-9A64vrxQWPF1b2PgoN-7B-cnXu-9ntXK"
+EBAY_APP_ID = "aaronbro-dealfind-PRD-1e7fa1504-3b2c59e2"
 
 #############################
 
@@ -175,3 +175,4 @@ while True:
     except Exception as e:
         print("BOT ERROR:", e)
         time.sleep(60)
+
