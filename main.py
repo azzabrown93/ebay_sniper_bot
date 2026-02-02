@@ -1,57 +1,24 @@
 import requests
+from bs4 import BeautifulSoup
 import time
 import os
 import base64
 
-print("===== MONSTER EBAY SNIPER ACTIVE =====")
+print("===== AMAZON → EBAY ARBITRAGE BOT LIVE =====")
 
 EBAY_CLIENT_ID = os.getenv("EBAY_CLIENT_ID")
 EBAY_CLIENT_SECRET = os.getenv("EBAY_CLIENT_SECRET")
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 
-CHECK_INTERVAL = 90
-MAX_PRICE = 400
-MIN_PROFIT = 35
+MIN_PROFIT = 25
 FEE_RATE = 0.15
+CHECK_INTERVAL = 600  # every 10 mins
 
 SEEN = set()
 
 ########################################
 
-KEYWORDS = [
-    "dyson v15",
-    "dyson airwrap",
-    "airpods pro",
-    "sony wh-1000xm5",
-    "steam deck",
-    "nintendo switch oled",
-    "apple watch ultra",
-    "dji mini 3 pro",
-    "gopro hero 12",
-    "lego technic"
-]
-
-MISSPELLINGS = [
-    "dyzon",
-    "airpod pro",
-    "soni headphones",
-    "apl watch",
-    "nintndo switch",
-    "lego technik"
-]
-
-BAD_WORDS = [
-    "parts","repair","broken","faulty",
-    "spares","untested","for parts",
-    "empty box","box only","manual only",
-    "strap","case only","damaged",
-    "missing","cracked","shell","housing",
-    "job lot","bundle","cover"
-]
-
-########################################
-
-def get_token():
+def get_ebay_token():
 
     creds = f"{EBAY_CLIENT_ID}:{EBAY_CLIENT_SECRET}"
     encoded = base64.b64encode(creds.encode()).decode()
@@ -76,21 +43,16 @@ def get_token():
 
 ########################################
 
-def send_discord(title, price, avg, profit, link):
-
-    tier = "⚡ STRONG FLIP"
-
-    if profit > 70:
-        tier = "🔥 ELITE FLIP"
+def send_discord(title, amazon_price, avg_price, profit, link):
 
     msg = {
         "content":f"""
-{tier}
+🔥 **AMAZON → EBAY FLIP**
 
 🛒 {title}
 
-Buy: £{price}
-Avg Sold: £{avg}
+Amazon: £{amazon_price}
+Avg Sold: £{avg_price}
 Net Profit: £{profit}
 
 {link}
@@ -101,13 +63,7 @@ Net Profit: £{profit}
 
 ########################################
 
-def bad(title):
-    t = title.lower()
-    return any(w in t for w in BAD_WORDS)
-
-########################################
-
-def avg_sold(token, keyword):
+def get_ebay_avg(token, query):
 
     headers = {
         "Authorization": f"Bearer {token}",
@@ -115,9 +71,9 @@ def avg_sold(token, keyword):
     }
 
     params = {
-        "q":keyword,
+        "q":query,
         "filter":"soldItemsOnly:true",
-        "limit":20
+        "limit":12
     }
 
     r = requests.get(
@@ -126,94 +82,85 @@ def avg_sold(token, keyword):
         params=params
     )
 
-    data = r.json().get("itemSummaries", [])
-
-    if len(data) < 8:
-        return None  # low demand filter
+    items = r.json().get("itemSummaries", [])
 
     prices = []
 
-    for i in data:
+    for i in items:
         try:
             prices.append(float(i["price"]["value"]))
         except:
             pass
 
+    if len(prices) < 5:
+        return None
+
     return sum(prices)/len(prices)
 
 ########################################
 
-def scan(token, keyword):
+def scan_amazon():
 
     headers = {
-        "Authorization": f"Bearer {token}",
-        "X-EBAY-C-MARKETPLACE-ID":"EBAY_GB"
+        "User-Agent":
+        "Mozilla/5.0"
     }
 
-    params = {
-        "q":keyword,
-        "limit":30,
-        "sort":"newlyListed"
-    }
+    url = "https://www.amazon.co.uk/gp/goldbox"
 
-    r = requests.get(
-        "https://api.ebay.com/buy/browse/v1/item_summary/search",
-        headers=headers,
-        params=params
-    )
+    r = requests.get(url, headers=headers)
 
-    avg = avg_sold(token, keyword)
+    soup = BeautifulSoup(r.text, "lxml")
 
-    if not avg:
-        return
+    products = soup.select(".DealContent-module__truncate_sWbxETx42ZPStTc9jwySW")
 
-    for item in r.json().get("itemSummaries", []):
+    prices = soup.select(".a-price-whole")
 
-        id = item.get("itemId")
-
-        if id in SEEN:
-            continue
-
-        title = item.get("title","")
-        price = float(item["price"]["value"])
-        link = item.get("itemWebUrl")
-
-        if price > MAX_PRICE:
-            continue
-
-        if bad(title):
-            continue
-
-        fee = avg * FEE_RATE
-        profit = round(avg - price - fee,2)
-
-        if profit >= MIN_PROFIT:
-
-            print("DEAL:",title)
-
-            send_discord(
-                title,
-                round(price,2),
-                round(avg,2),
-                profit,
-                link
-            )
-
-            SEEN.add(id)
+    return list(zip(products, prices))
 
 ########################################
 
-token = get_token()
+token = get_ebay_token()
 
 while True:
 
     try:
 
-        if not token:
-            token = get_token()
+        deals = scan_amazon()
 
-        for k in KEYWORDS + MISSPELLINGS:
-            scan(token, k)
+        for product, price_tag in deals:
+
+            title = product.text.strip()
+
+            try:
+                amazon_price = float(price_tag.text.replace(",", ""))
+            except:
+                continue
+
+            if title in SEEN:
+                continue
+
+            avg_price = get_ebay_avg(token, title)
+
+            if not avg_price:
+                continue
+
+            fee = avg_price * FEE_RATE
+            profit = round(avg_price - amazon_price - fee,2)
+
+            if profit >= MIN_PROFIT:
+
+                print("FLIP FOUND:", title)
+
+                send_discord(
+                    title,
+                    amazon_price,
+                    round(avg_price,2),
+                    profit,
+                    "https://www.amazon.co.uk/gp/goldbox"
+                )
+
+                SEEN.add(title)
 
         print("Sleeping...")
         time.sleep(CHECK_INTERVAL)
@@ -221,4 +168,5 @@ while True:
     except Exception as e:
 
         print("Error:",e)
+        token = get_ebay_token()
         time.sleep(60)
