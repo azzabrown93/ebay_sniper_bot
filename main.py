@@ -3,67 +3,53 @@ import time
 import os
 import base64
 
-print("========== ELITE EBAY SNIPER STARTED ==========")
-
-############################################
-# ENV VARIABLES
-############################################
+print("===== MONSTER EBAY SNIPER ACTIVE =====")
 
 EBAY_CLIENT_ID = os.getenv("EBAY_CLIENT_ID")
 EBAY_CLIENT_SECRET = os.getenv("EBAY_CLIENT_SECRET")
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 
-if not EBAY_CLIENT_ID or not EBAY_CLIENT_SECRET or not DISCORD_WEBHOOK:
-    raise Exception("Missing environment variables!")
-
-############################################
-# BOT SETTINGS (EDIT THESE)
-############################################
-
-CHECK_INTERVAL = 180        # seconds
-MAX_PRICE = 200            # don't alert above this
-MIN_PROFIT = 30            # realistic minimum after fees
-
-# HIGH VALUE SEARCH TERMS
-KEYWORDS = [
-    "airpods pro",
-    "sony wh-1000xm5",
-    "sony wh-1000xm4",
-    "dyson v10",
-    "dyson v11",
-    "dyson v15",
-    "nintendo switch oled",
-    "apple watch series 7",
-    "apple watch series 8",
-    "bosch professional",
-]
-
-# JUNK FILTER
-BAD_WORDS = [
-    "parts",
-    "spares",
-    "repair",
-    "faulty",
-    "broken",
-    "replacement",
-    "read description",
-    "doesn't work",
-    "doesnt work",
-    "strap",
-    "box only",
-    "manual only",
-    "empty box",
-    "earpiece",
-    "single",
-    "1x",
-    "for parts",
-]
+CHECK_INTERVAL = 90
+MAX_PRICE = 400
+MIN_PROFIT = 35
+FEE_RATE = 0.15
 
 SEEN = set()
 
-############################################
-# GET EBAY TOKEN
-############################################
+########################################
+
+KEYWORDS = [
+    "dyson v15",
+    "dyson airwrap",
+    "airpods pro",
+    "sony wh-1000xm5",
+    "steam deck",
+    "nintendo switch oled",
+    "apple watch ultra",
+    "dji mini 3 pro",
+    "gopro hero 12",
+    "lego technic"
+]
+
+MISSPELLINGS = [
+    "dyzon",
+    "airpod pro",
+    "soni headphones",
+    "apl watch",
+    "nintndo switch",
+    "lego technik"
+]
+
+BAD_WORDS = [
+    "parts","repair","broken","faulty",
+    "spares","untested","for parts",
+    "empty box","box only","manual only",
+    "strap","case only","damaged",
+    "missing","cracked","shell","housing",
+    "job lot","bundle","cover"
+]
+
+########################################
 
 def get_token():
 
@@ -72,73 +58,66 @@ def get_token():
 
     headers = {
         "Authorization": f"Basic {encoded}",
-        "Content-Type": "application/x-www-form-urlencoded",
+        "Content-Type":"application/x-www-form-urlencoded"
     }
 
     data = {
-        "grant_type": "client_credentials",
-        "scope": "https://api.ebay.com/oauth/api_scope",
+        "grant_type":"client_credentials",
+        "scope":"https://api.ebay.com/oauth/api_scope"
     }
 
     r = requests.post(
         "https://api.ebay.com/identity/v1/oauth2/token",
         headers=headers,
-        data=data,
+        data=data
     )
 
-    if r.status_code != 200:
-        print("TOKEN ERROR:", r.text)
-        return None
-
-    print("New token acquired")
     return r.json()["access_token"]
 
-############################################
-# DISCORD ALERT
-############################################
+########################################
 
-def alert(title, price, avg, profit, url):
+def send_discord(title, price, avg, profit, link):
 
-    message = {
-        "content":
-f"""
-🚨 **UNDERPRICED EBAY ITEM**
+    tier = "⚡ STRONG FLIP"
+
+    if profit > 70:
+        tier = "🔥 ELITE FLIP"
+
+    msg = {
+        "content":f"""
+{tier}
 
 🛒 {title}
 
-💷 Price: £{price}
-📊 Avg Sold: £{avg}
-🔥 Estimated Profit: £{profit}
+Buy: £{price}
+Avg Sold: £{avg}
+Net Profit: £{profit}
 
-{url}
+{link}
 """
     }
 
-    requests.post(DISCORD_WEBHOOK, json=message)
+    requests.post(DISCORD_WEBHOOK, json=msg)
 
-############################################
-# FILTER
-############################################
+########################################
 
-def junk(title):
-    title = title.lower()
-    return any(word in title for word in BAD_WORDS)
+def bad(title):
+    t = title.lower()
+    return any(w in t for w in BAD_WORDS)
 
-############################################
-# GET SOLD AVG
-############################################
+########################################
 
-def sold_average(token, keyword):
+def avg_sold(token, keyword):
 
     headers = {
         "Authorization": f"Bearer {token}",
-        "X-EBAY-C-MARKETPLACE-ID": "EBAY_GB",
+        "X-EBAY-C-MARKETPLACE-ID":"EBAY_GB"
     }
 
     params = {
-        "q": keyword,
-        "filter": "soldItemsOnly:true",
-        "limit": 15
+        "q":keyword,
+        "filter":"soldItemsOnly:true",
+        "limit":20
     }
 
     r = requests.get(
@@ -147,92 +126,82 @@ def sold_average(token, keyword):
         params=params
     )
 
-    if r.status_code != 200:
-        return None
+    data = r.json().get("itemSummaries", [])
 
-    items = r.json().get("itemSummaries", [])
+    if len(data) < 8:
+        return None  # low demand filter
 
     prices = []
 
-    for i in items:
+    for i in data:
         try:
             prices.append(float(i["price"]["value"]))
         except:
             pass
 
-    if len(prices) < 5:
-        return None
+    return sum(prices)/len(prices)
 
-    return round(sum(prices) / len(prices), 2)
+########################################
 
-############################################
-# SEARCH
-############################################
-
-def search(token, keyword):
+def scan(token, keyword):
 
     headers = {
         "Authorization": f"Bearer {token}",
-        "X-EBAY-C-MARKETPLACE-ID": "EBAY_GB",
+        "X-EBAY-C-MARKETPLACE-ID":"EBAY_GB"
     }
 
     params = {
-        "q": keyword,
-        "sort": "newlyListed",
-        "limit": 25,
+        "q":keyword,
+        "limit":30,
+        "sort":"newlyListed"
     }
 
     r = requests.get(
         "https://api.ebay.com/buy/browse/v1/item_summary/search",
         headers=headers,
-        params=params,
+        params=params
     )
 
-    if r.status_code == 401:
-        return "TOKEN_EXPIRED"
+    avg = avg_sold(token, keyword)
 
-    if r.status_code != 200:
+    if not avg:
         return
 
-    items = r.json().get("itemSummaries", [])
+    for item in r.json().get("itemSummaries", []):
 
-    avg_price = sold_average(token, keyword)
+        id = item.get("itemId")
 
-    if not avg_price:
-        return
-
-    for item in items:
-
-        item_id = item.get("itemId")
-
-        if item_id in SEEN:
+        if id in SEEN:
             continue
 
-        title = item.get("title", "")
+        title = item.get("title","")
         price = float(item["price"]["value"])
-        url = item.get("itemWebUrl")
+        link = item.get("itemWebUrl")
 
         if price > MAX_PRICE:
             continue
 
-        if junk(title):
+        if bad(title):
             continue
 
-        # subtract approx ebay fees (13%)
-        resale = avg_price * 0.87
-        profit = round(resale - price, 2)
+        fee = avg * FEE_RATE
+        profit = round(avg - price - fee,2)
 
         if profit >= MIN_PROFIT:
 
-            print("DEAL FOUND:", title)
+            print("DEAL:",title)
 
-            alert(title, price, avg_price, profit, url)
+            send_discord(
+                title,
+                round(price,2),
+                round(avg,2),
+                profit,
+                link
+            )
 
-            SEEN.add(item_id)
+            SEEN.add(id)
 
-############################################
-# MAIN LOOP
-############################################
+########################################
 
 token = get_token()
 
@@ -243,19 +212,13 @@ while True:
         if not token:
             token = get_token()
 
-        for keyword in KEYWORDS:
+        for k in KEYWORDS + MISSPELLINGS:
+            scan(token, k)
 
-            result = search(token, keyword)
-
-            if result == "TOKEN_EXPIRED":
-                token = get_token()
-
-        print("Sleeping...\n")
+        print("Sleeping...")
         time.sleep(CHECK_INTERVAL)
 
     except Exception as e:
 
-        print("BOT ERROR:", e)
-
-        # prevents crash loop
+        print("Error:",e)
         time.sleep(60)
