@@ -1,0 +1,162 @@
+import requests
+import time
+import os
+
+print("EBAY SNIPER BOT STARTED")
+
+EBAY_CLIENT_ID = os.getenv("EBAY_CLIENT_ID")
+EBAY_CLIENT_SECRET = os.getenv("EBAY_CLIENT_SECRET")
+DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
+
+CHECK_INTERVAL = 120  # every 2 minutes
+
+KEYWORDS = [
+    "sony wh-1000xm5",
+    "sony wh-1000xm4",
+    "bose qc45",
+    "airpods max",
+    "dyson airwrap",
+    "dyson supersonic",
+    "ghd platinum",
+    "steelseries arctis",
+    "xbox elite controller",
+    "dualsense edge",
+    "meta quest",
+    "garmin watch",
+    "apple watch",
+    "milwaukee tool",
+    "dewalt drill",
+    "makita impact"
+]
+
+MAX_PRICE = 150  # sniper underpriced items
+
+
+#########################################
+# GET EBAY TOKEN
+#########################################
+
+def get_ebay_token():
+    url = "https://api.ebay.com/identity/v1/oauth2/token"
+
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
+
+    data = {
+        "grant_type": "client_credentials",
+        "scope": "https://api.ebay.com/oauth/api_scope"
+    }
+
+    response = requests.post(
+        url,
+        headers=headers,
+        data=data,
+        auth=(EBAY_CLIENT_ID, EBAY_CLIENT_SECRET),
+        timeout=30
+    )
+
+    return response.json()["access_token"]
+
+
+#########################################
+# DISCORD ALERT
+#########################################
+
+def send_discord(message):
+    try:
+        requests.post(DISCORD_WEBHOOK, json={"content": message}, timeout=10)
+    except:
+        print("Discord failed.")
+
+
+#########################################
+# SEARCH EBAY
+#########################################
+
+def search_ebay(token, keyword):
+
+    url = "https://api.ebay.com/buy/browse/v1/item_summary/search"
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-EBAY-C-MARKETPLACE-ID": "EBAY_GB"
+    }
+
+    params = {
+        "q": keyword,
+        "filter": "buyingOptions:{FIXED_PRICE},itemLocationCountry:GB",
+        "sort": "newlyListed",
+        "limit": 5
+    }
+
+    response = requests.get(url, headers=headers, params=params, timeout=30)
+
+    if response.status_code != 200:
+        print("API error:", response.text)
+        return []
+
+    return response.json().get("itemSummaries", [])
+
+
+#########################################
+# MAIN LOOP
+#########################################
+
+token = get_ebay_token()
+print("Token received.")
+
+seen_items = set()
+
+while True:
+
+    try:
+
+        for keyword in KEYWORDS:
+
+            print(f"Scanning: {keyword}")
+
+            items = search_ebay(token, keyword)
+
+            for item in items:
+
+                item_id = item["itemId"]
+
+                if item_id in seen_items:
+                    continue
+
+                seen_items.add(item_id)
+
+                price = float(item["price"]["value"])
+                title = item["title"]
+                link = item["itemWebUrl"]
+
+                if price <= MAX_PRICE:
+
+                    message = f"""
+🔥 **UNDERPRICED ITEM FOUND**
+
+🏷️ {title}
+
+💰 Price: £{price}
+
+🔎 Keyword: {keyword}
+
+👉 {link}
+"""
+
+                    print("DEAL FOUND:", title)
+
+                    send_discord(message)
+
+        print(f"Sleeping {CHECK_INTERVAL} seconds...\n")
+        time.sleep(CHECK_INTERVAL)
+
+    except Exception as e:
+
+        print("Bot error:", str(e))
+
+        # refresh token if needed
+        token = get_ebay_token()
+
+        time.sleep(60)
