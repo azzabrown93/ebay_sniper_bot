@@ -1,6 +1,7 @@
 import requests
 import time
 import os
+import base64
 
 print("===== EBAY SNIPER BOT STARTED =====")
 
@@ -9,8 +10,8 @@ EBAY_CLIENT_SECRET = os.getenv("EBAY_CLIENT_SECRET")
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 
 CHECK_INTERVAL = 180  # 3 minutes
-MAX_PRICE = 200  # your budget
-MIN_PROFIT = 25  # minimum profit target (£)
+MAX_PRICE = 200
+MIN_PROFIT = 25
 
 KEYWORDS = [
     "sony headphones",
@@ -32,22 +33,27 @@ BAD_WORDS = [
     "read description",
     "strap",
     "box only",
-    "manual only", 
+    "manual only",
     "earpiece",
     "1x",
     "single"
 ]
 
-#########################################
+SEEN_ITEMS = set()
+
+
+########################################
 # GET EBAY ACCESS TOKEN
-#########################################
+########################################
 
 def get_ebay_token():
     print("Getting eBay token...")
 
-    url = "https://api.ebay.com/identity/v1/oauth2/token"
+    credentials = f"{EBAY_CLIENT_ID}:{EBAY_CLIENT_SECRET}"
+    encoded_credentials = base64.b64encode(credentials.encode()).decode()
 
     headers = {
+        "Authorization": f"Basic {encoded_credentials}",
         "Content-Type": "application/x-www-form-urlencoded"
     }
 
@@ -57,135 +63,169 @@ def get_ebay_token():
     }
 
     response = requests.post(
-        url,
+        "https://api.ebay.com/identity/v1/oauth2/token",
         headers=headers,
-        data=data,
-        auth=(EBAY_CLIENT_ID, EBAY_CLIENT_SECRET)
+        data=data
     )
 
-    token = response.json()["access_token"]
+    if response.status_code != 200:
+        print("Failed to get token:", response.text)
+        return None
 
-    print("Token acquired.")
-    return token
-
-
-#########################################
-# DISCORD ALERT
-#########################################
-
-def send_discord(message):
-    try:
-        requests.post(DISCORD_WEBHOOK, json={"content": message})
-    except:
-        print("Discord failed.")
+    return response.json()["access_token"]
 
 
-#########################################
+########################################
+# SEND TO DISCORD
+########################################
+
+def send_to_discord(title, price, avg_price, profit, url):
+    message = {
+        "content": f"""
+🚨 **UNDERPRICED EBAY ITEM**
+
+🛒 **{title}**
+💷 Price: £{price}
+📈 Avg Sold: £{avg_price}
+🔥 Profit: £{profit}
+
+{url}
+"""
+    }
+
+    requests.post(DISCORD_WEBHOOK, json=message)
+
+
+########################################
+# CHECK FOR BAD WORDS
+########################################
+
+def contains_bad_words(text):
+    text = text.lower()
+    return any(word in text for word in BAD_WORDS)
+
+
+########################################
 # GET AVERAGE SOLD PRICE
-#########################################
+########################################
 
-def get_sold_average(keyword, token):
-
-    url = "https://api.ebay.com/buy/browse/v1/item_summary/search"
+def get_avg_sold_price(token, keyword):
 
     headers = {
-        "Authorization": f"Bearer {token}"
+        "Authorization": f"Bearer {token}",
+        "X-EBAY-C-MARKETPLACE-ID": "EBAY_GB"
     }
 
     params = {
         "q": keyword,
         "filter": "soldItemsOnly:true",
-        "limit": 20
+        "limit": 10
     }
 
-    response = requests.get(url, headers=headers, params=params)
+    response = requests.get(
+        "https://api.ebay.com/buy/browse/v1/item_summary/search",
+        headers=headers,
+        params=params
+    )
 
-    data = response.json()
+    if response.status_code != 200:
+        return None
+
+    items = response.json().get("itemSummaries", [])
 
     prices = []
 
-    if "itemSummaries" not in data:
-        return None
-
-    for item in data["itemSummaries"]:
+    for item in items:
         try:
             prices.append(float(item["price"]["value"]))
         except:
             pass
 
-    if len(prices) < 5:
+    if not prices:
         return None
 
-    avg_price = sum(prices) / len(prices)
-
-    return avg_price
+    return sum(prices) / len(prices)
 
 
-#########################################
-# FIND LIVE UNDERPRICED LISTINGS
-#########################################
+########################################
+# SEARCH EBAY
+########################################
 
-def find_deals(keyword, token, avg_price):
+def search_ebay(token, keyword):
 
-    url = "https://api.ebay.com/buy/browse/v1/item_summary/search"
+    print(f"Searching for: {keyword}")
 
     headers = {
-        "Authorization": f"Bearer {token}"
+        "Authorization": f"Bearer {token}",
+        "X-EBAY-C-MARKETPLACE-ID": "EBAY_GB"
     }
 
     params = {
         "q": keyword,
-        "sort": "price",
-        "limit": 10
+        "sort": "newlyListed",
+        "limit": 20
     }
 
-    response = requests.get(url, headers=headers, params=params)
+    response = requests.get(
+        "https://api.ebay.com/buy/browse/v1/item_summary/search",
+        headers=headers,
+        params=params
+    )
 
-    data = response.json()
-
-    if "itemSummaries" not in data:
+    if response.status_code != 200:
+        print("Search failed.")
         return
 
-    for item in data["itemSummaries"]:
+    items = response.json().get("itemSummaries", [])
 
-        try:
-            price = float(item["price"]["value"])
-            title = item["title"]
-            link = item["itemWebUrl"]
+    avg_price = get_avg_sold_price(token, keyword)
 
-        except:
+    if not avg_price:
+        return
+
+    for item in items:
+
+        item_id = item.get("itemId")
+
+        if item_id in SEEN_ITEMS:
             continue
 
+        title = item.get("title", "")
+        price = float(item["price"]["value"])
+        url = item.get("itemWebUrl")
+
+        # Skip expensive items
         if price > MAX_PRICE:
             continue
 
-        profit = avg_price - price
+        # Skip junk listings
+        if contains_bad_words(title):
+            continue
 
-        ###################################
-        # DEAL DETECTED
-        ###################################
+        profit = round(avg_price - price, 2)
 
-        if profit > MIN_PROFIT:
+        if profit >= MIN_PROFIT:
 
-            message = f"""
-🚨 **UNDERPRICED EBAY ITEM**
+            print(f"FOUND DEAL: {title}")
 
-🛒 {title}
+            send_to_discord(
+                title,
+                price,
+                round(avg_price, 2),
+                profit,
+                url
+            )
 
-💰 Price: £{price}
-📈 Avg Sold: £{round(avg_price,2)}
-🔥 Profit: £{round(profit,2)}
-
-{link}
-"""
-
-            print("DEAL FOUND!")
-            send_discord(message)
+            SEEN_ITEMS.add(item_id)
 
 
-#########################################
+########################################
 # MAIN LOOP
-#########################################
+########################################
+
+if not EBAY_CLIENT_ID or not EBAY_CLIENT_SECRET or not DISCORD_WEBHOOK:
+    print("ERROR: Missing environment variables!")
+    exit()
 
 token = get_ebay_token()
 
@@ -193,24 +233,16 @@ while True:
 
     try:
 
-        print("Scanning market...")
+        if not token:
+            token = get_ebay_token()
 
         for keyword in KEYWORDS:
+            search_ebay(token, keyword)
 
-            avg_price = get_sold_average(keyword, token)
-
-            if avg_price:
-                print(f"{keyword} avg: £{round(avg_price,2)}")
-                find_deals(keyword, token, avg_price)
-
-        print(f"Sleeping {CHECK_INTERVAL} seconds...\n")
+        print("Sleeping...")
         time.sleep(CHECK_INTERVAL)
 
     except Exception as e:
 
-        print("ERROR:", str(e))
-
-        # refresh token if needed
-        token = get_ebay_token()
+        print("BOT ERROR:", str(e))
         time.sleep(60)
-
