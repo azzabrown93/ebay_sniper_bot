@@ -22,6 +22,21 @@ KEYWORDS = [
     "bosch tools"
 ]
 
+BAD_WORDS = [
+    "replacement",
+    "part",
+    "spares",
+    "repair",
+    "faulty",
+    "broken",
+    "read description",
+    "strap",
+    "box only",
+    "manual only", 
+    "earpiece",
+    "1x",
+    "single"
+]
 
 #########################################
 # GET EBAY ACCESS TOKEN
@@ -198,3 +213,4 @@ while True:
         # refresh token if needed
         token = get_ebay_token()
         time.sleep(60)
+
