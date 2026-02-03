@@ -10,7 +10,7 @@ EBAY_CLIENT_ID = os.getenv("EBAY_CLIENT_ID")
 EBAY_CLIENT_SECRET = os.getenv("EBAY_CLIENT_SECRET")
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 
-MIN_PROFIT = 25
+MIN_PROFIT = 15
 MIN_ROI = 0.35
 FEE_RATE = 0.15
 CHECK_INTERVAL = 900  # 15 mins
@@ -20,6 +20,7 @@ SEEN = set()
 #############################################
 
 KEYWORDS = [
+    
 ##############
 # SMART HOME
 ##############
