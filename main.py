@@ -16,7 +16,7 @@ MIN_ROI = 0.35
 FEE_RATE = 0.15
 
 SEEN = set()
-def human_sleep(min_seconds=240, max_seconds=900):
+def human_sleep(min_seconds=240,max_seconds=1200):
     sleep_time = random.randint(min_seconds,max_seconds)
     print(f"😴 sleeping for {sleep_time} seconds ( {round(sleep_time/60,1)} mins)...")
     time.sleep(sleep_time)
@@ -339,7 +339,7 @@ while True:
                     SEEN.add(title)
 
         print("Sleeping...")
-        time.sleep(CHECK_INTERVAL)
+        human_sleep()
 
     except Exception as e:
 
