@@ -1,5 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
+import random
 import time
 import os
 import base64
@@ -13,9 +14,12 @@ DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 MIN_PROFIT = 15
 MIN_ROI = 0.35
 FEE_RATE = 0.15
-CHECK_INTERVAL = 900  # 15 mins
 
 SEEN = set()
+def human_sleep(min_seconds=240, max_seconds=900):
+    sleep_time = random.randint(min_seconds,max_seconds)
+    print(f"😴 sleeping for {sleep_time} seconds ( {round(sleep_time/60,1)} mins)...")
+    time.sleep(sleep_time)
 
 #############################################
 
