@@ -20,21 +20,127 @@ SEEN = set()
 #############################################
 
 KEYWORDS = [
+##############
+# SMART HOME
+##############
 
-    "lego",
-    "pokemon",
-    "dyson",
-    "shark vacuum",
-    "ninja air fryer",
-    "logitech",
-    "steelseries",
-    "samsung ssd",
-    "sony headphones",
-    "bosch tools",
-    "dewalt",
-    "instant pot",
-    "baby monitor",
-    "vtech baby",
+"ring doorbell",
+"ring floodlight",
+"blink outdoor",
+"arlo pro",
+"arlo essential",
+"eufy security",
+"eufy doorbell",
+"tapo camera",
+"google nest cam",
+"nest doorbell",
+
+##############
+# VACUUM GOLDMINE
+##############
+
+"dyson v7",
+"dyson v8",
+"dyson v10",
+"dyson v11",
+"dyson cyclone",
+"shark cordless",
+"shark stratos",
+"shark anti hair wrap",
+
+##############
+# KITCHEN MONEY PRINTERS
+##############
+
+"ninja air fryer",
+"ninja dual air fryer",
+"ninja foodi",
+"instant pot duo",
+"cosori air fryer",
+"nutribullet",
+"vitamix",
+"kitchenaid mixer",
+
+##############
+# AUDIO (HIGH LIQUIDITY)
+##############
+
+"sony xm4",
+"sony xm5",
+"bose qc45",
+"bose 700",
+"airpods pro",
+"airpods max",
+"jbl flip",
+"jbl charge",
+"ultimate ears",
+
+##############
+# GAMING ACCESSORIES (NOT CONSOLES)
+##############
+
+"logitech g pro",
+"steelseries arctis",
+"razer headset",
+"razer mouse",
+"elgato capture",
+"elgato wave",
+"gaming keyboard",
+"gaming mouse wireless",
+
+##############
+# STORAGE / SSD
+##############
+
+"samsung 980",
+"samsung 990",
+"wd black sn850",
+"crucial p3",
+"portable ssd",
+"nvme ssd",
+"external ssd",
+
+##############
+# BABY TECH (INSANELY UNDERRATED)
+##############
+
+"owlet monitor",
+"nanit pro",
+"vtech baby monitor",
+"motorola baby monitor",
+"angelcare monitor",
+
+##############
+# LEGO ECOSYSTEM
+##############
+
+"lego technic",
+"lego creator",
+"lego star wars",
+"lego ideas",
+"retired lego",
+"lego architecture",
+
+##############
+# POWER TOOLS (HIGH ROI)
+##############
+
+"dewalt xr",
+"milwaukee m18",
+"makita drill",
+"bosch professional",
+"dewalt combi",
+
+##############
+# CONTENT CREATOR ECONOMY
+##############
+
+"gopro hero",
+"dji osmo",
+"dji mic",
+"rode microphone",
+"ring light",
+"streaming microphone"
 ]
 
 BAD_WORDS = [
