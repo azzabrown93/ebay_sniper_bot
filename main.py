@@ -5,166 +5,87 @@ import time
 import os
 import base64
 
-print("===== SNIPER AMAZON → EBAY BOT LIVE =====")
+print("🚨 VALUE SNIPER BOT — LIVE")
 
 EBAY_CLIENT_ID = os.getenv("EBAY_CLIENT_ID")
 EBAY_CLIENT_SECRET = os.getenv("EBAY_CLIENT_SECRET")
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 
-MIN_PROFIT = 15
-MIN_ROI = 0.35
+MIN_PROFIT = 12        # LOWER = MORE ALERTS
+MIN_ROI = 0.28        # 28% is the sweet spot
 FEE_RATE = 0.15
 
 SEEN = set()
-def human_sleep(min_seconds=240,max_seconds=1200):
-    sleep_time = random.randint(min_seconds,max_seconds)
-    print(f"😴 sleeping for {sleep_time} seconds ( {round(sleep_time/60,1)} mins)...")
-    time.sleep(sleep_time)
 
 #############################################
 
+def human_sleep():
+    sleep_time = random.randint(180, 420)  # 3–7 minutes
+    print(f"😴 Sleeping {sleep_time}s")
+    time.sleep(sleep_time)
+
+#############################################
+# THIS is where the magic is.
+# These are CHAOTIC markets.
+#############################################
+
 KEYWORDS = [
-    
-##############
-# SMART HOME
-##############
 
-"ring doorbell",
-"ring floodlight",
-"blink outdoor",
-"arlo pro",
-"arlo essential",
-"eufy security",
-"eufy doorbell",
-"tapo camera",
-"google nest cam",
-"nest doorbell",
+# Collectibles / Toys (AMAZING margins)
 
-##############
-# VACUUM GOLDMINE
-##############
+"pokemon bundle",
+"pokemon box",
+"elite trainer box",
+"booster box",
+"yu gi oh box",
+"lorcana",
+"one piece cards",
+"funko bundle",
+"funko lot",
 
-"dyson v7",
-"dyson v8",
-"dyson v10",
-"dyson v11",
-"dyson cyclone",
-"shark cordless",
-"shark stratos",
-"shark anti hair wrap",
+# Lego flips destroy Amazon regularly
 
-##############
-# KITCHEN MONEY PRINTERS
-##############
+"lego bundle",
+"lego clearance",
+"lego retired",
+"lego sale",
 
-"ninja air fryer",
-"ninja dual air fryer",
-"ninja foodi",
-"instant pot duo",
-"cosori air fryer",
-"nutribullet",
-"vitamix",
-"kitchenaid mixer",
+# Board games spike constantly
 
-##############
-# AUDIO (HIGH LIQUIDITY)
-##############
+"board game bundle",
+"warhammer",
+"dungeons dragons",
+"mtg bundle",
 
-"sony xm4",
-"sony xm5",
-"bose qc45",
-"bose 700",
-"airpods pro",
-"airpods max",
-"jbl flip",
-"jbl charge",
-"ultimate ears",
+# Baby gear (massively mispriced often)
 
-##############
-# GAMING ACCESSORIES (NOT CONSOLES)
-##############
+"baby monitor",
+"breast pump",
+"nanit",
+"owlet",
 
-"logitech g pro",
-"steelseries arctis",
-"razer headset",
-"razer mouse",
-"elgato capture",
-"elgato wave",
-"gaming keyboard",
-"gaming mouse wireless",
+# Random high ROI chaos
 
-##############
-# STORAGE / SSD
-##############
+"nerf bundle",
+"hot wheels lot",
+"rc car",
+"drone with camera",
+"3d printer",
 
-"samsung 980",
-"samsung 990",
-"wd black sn850",
-"crucial p3",
-"portable ssd",
-"nvme ssd",
-"external ssd",
+# Seasonal panic
 
-##############
-# BABY TECH (INSANELY UNDERRATED)
-##############
-
-"owlet monitor",
-"nanit pro",
-"vtech baby monitor",
-"motorola baby monitor",
-"angelcare monitor",
-
-##############
-# LEGO ECOSYSTEM
-##############
-
-"lego technic",
-"lego creator",
-"lego star wars",
-"lego ideas",
-"retired lego",
-"lego architecture",
-
-##############
-# POWER TOOLS (HIGH ROI)
-##############
-
-"dewalt xr",
-"milwaukee m18",
-"makita drill",
-"bosch professional",
-"dewalt combi",
-
-##############
-# CONTENT CREATOR ECONOMY
-##############
-
-"gopro hero",
-"dji osmo",
-"dji mic",
-"rode microphone",
-"ring light",
-"streaming microphone"
+"christmas lights",
+"heater electric",
+"air conditioner portable"
 ]
 
-BAD_WORDS = [
+#############################################
 
-    "case",
-    "cover",
-    "replacement",
-    "strap",
-    "cable",
-    "adapter",
-    "refill",
-    "ink",
-    "parts",
-    "repair",
-    "sticker",
-    "toy figure",
-    "single card",
-    "proxy",
-    "damaged",
+BAD_WORDS = [
+    "case","cover","replacement","strap",
+    "cable","adapter","refill","ink",
+    "parts","repair","sticker",
+    "damaged","box only"
 ]
 
 #############################################
@@ -204,7 +125,7 @@ def get_ebay_avg(token, query):
     params = {
         "q":query,
         "filter":"soldItemsOnly:true",
-        "limit":20
+        "limit":25
     }
 
     r = requests.get(
@@ -223,7 +144,7 @@ def get_ebay_avg(token, query):
         except:
             pass
 
-    if len(prices) < 7:
+    if len(prices) < 6:
         return None
 
     return sum(prices)/len(prices)
@@ -234,12 +155,12 @@ def send_discord(title, amazon_price, avg_price, profit, roi, link):
 
     msg = {
         "content":f"""
-🚨 **SNIPER FLIP FOUND**
+🔥 **FLIP FOUND**
 
-🛒 {title}
+{title}
 
-Amazon: £{amazon_price}
-Avg Sold: £{avg_price}
+🛒 Amazon: £{amazon_price}
+📦 eBay Avg: £{avg_price}
 
 💰 Profit: £{profit}
 📈 ROI: {int(roi*100)}%
@@ -263,9 +184,7 @@ def scan_amazon(keyword):
     soup = BeautifulSoup(r.text, "lxml")
 
     titles = soup.select("h2 span")
-
     prices = soup.select(".a-price-whole")
-
     links = soup.select("h2 a")
 
     results = []
@@ -286,6 +205,8 @@ def scan_amazon(keyword):
 
         results.append((title, price, link))
 
+    print(f"Found {len(results)} products for {keyword}")
+
     return results
 
 #############################################
@@ -300,11 +221,11 @@ while True:
         if time.time() - last_token_refresh > 7000:
             token = get_ebay_token()
             last_token_refresh = time.time()
-            print("Refreshed eBay token")
+            print("✅ Token refreshed")
 
         for keyword in KEYWORDS:
 
-            print("Scanning:", keyword)
+            print("🔎 Scanning:", keyword)
 
             products = scan_amazon(keyword)
 
@@ -325,7 +246,7 @@ while True:
 
                 if profit >= MIN_PROFIT and roi >= MIN_ROI:
 
-                    print("SNIPER HIT:", title)
+                    print("🚨 FLIP:", title)
 
                     send_discord(
                         title,
@@ -338,7 +259,6 @@ while True:
 
                     SEEN.add(title)
 
-        print("Sleeping...")
         human_sleep()
 
     except Exception as e:
